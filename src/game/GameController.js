@@ -41,6 +41,7 @@ const TRIAL_BUDGET_TOTAL = 170;
 const TRIAL_COST_CASE = 110;
 const TRIAL_COST_CALL = 12;
 const TRIAL_COST_ANALYSIS = 6;
+const INFINITE_SHARED_TRIAL = true;
 const DISABLE_TRIAL =
   typeof __PUARO_DISABLE_TRIAL__ !== "undefined"
     ? Boolean(__PUARO_DISABLE_TRIAL__)
@@ -807,7 +808,7 @@ export class GameController {
         return;
       }
       this.#openConfirmOverlay(
-        "For better experience, add an ElevenLabs key and either a Gemini key or an OpenAI key. You can still play on a limited shared trial for about 5 to 10 minutes. This trial is one-time and will not reset after reload.",
+        "For better experience, add an ElevenLabs key and either a Gemini key or an OpenAI key. For now, the shared trial is available without a time limit, though it may still be busy during provider spikes.",
         () => this.#handleNewCase(confirmLoss, true),
       );
       return;
@@ -3701,6 +3702,10 @@ export class GameController {
         analysisRuns: 0,
       };
     }
+    if (INFINITE_SHARED_TRIAL) {
+      this.#trialState.exhausted = false;
+      this.#trialState.budgetRemaining = TRIAL_BUDGET_TOTAL;
+    }
     return this.#trialState;
   }
 
@@ -3717,6 +3722,7 @@ export class GameController {
 
   #isTrialExpired() {
     if (DISABLE_TRIAL) return false;
+    if (INFINITE_SHARED_TRIAL) return false;
     const trial = this.#getTrialState();
     return Boolean(
       trial.exhausted ||
@@ -3727,6 +3733,14 @@ export class GameController {
 
   #consumeTrialBudget(amount, kind = "usage") {
     const trial = this.#ensureTrialSessionStarted();
+    if (INFINITE_SHARED_TRIAL) {
+      if (kind === "case") trial.caseGenerations = (trial.caseGenerations ?? 0) + 1;
+      if (kind === "call") trial.callTurns = (trial.callTurns ?? 0) + 1;
+      if (kind === "analysis") trial.analysisRuns = (trial.analysisRuns ?? 0) + 1;
+      trial.exhausted = false;
+      this.#saveTrialState();
+      return true;
+    }
     if (this.#isTrialExpired()) return false;
 
     trial.budgetRemaining = Math.max(
@@ -3761,10 +3775,10 @@ export class GameController {
 
   #humanizeModelError(error, fallback) {
     const raw = String(error?.message ?? error ?? "");
-    if (this.#shouldUseTrialMode() && this.#isTrialExpired()) {
+    if (!INFINITE_SHARED_TRIAL && this.#shouldUseTrialMode() && this.#isTrialExpired()) {
       return "Trial ended. Add your own Gemini or OpenAI key, plus ElevenLabs, in Keys.";
     }
-    if (/prepayment credits are depleted/i.test(raw)) {
+    if (!INFINITE_SHARED_TRIAL && /prepayment credits are depleted/i.test(raw)) {
       return "The shared trial has been exhausted for now. Add your own Gemini or OpenAI key in Keys, or try again later.";
     }
     if (
