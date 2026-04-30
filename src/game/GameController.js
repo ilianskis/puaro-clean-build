@@ -38,7 +38,6 @@ const ANALYSIS_DELAY_MIN_MS = 60_000;
 const ANALYSIS_DELAY_MAX_MS = 120_000;
 const TRIAL_DURATION_MS = 10 * 60_000;
 const TRIAL_BUDGET_TOTAL = 170;
-const TRIAL_COST_CASE = 110;
 const TRIAL_COST_CALL = 12;
 const TRIAL_COST_ANALYSIS = 6;
 const INFINITE_SHARED_TRIAL = true;
@@ -670,12 +669,6 @@ export class GameController {
 
     if (this.#usesSharedTextTrial()) {
       this.#ensureTrialSessionStarted();
-      if (this.#isTrialExpired()) {
-        this.#endTrialSession(
-          "Trial ended. Add your own Gemini or OpenAI key, plus ElevenLabs, to keep playing.",
-        );
-        return;
-      }
     }
 
     // Cycle loading status messages while the case generator works
@@ -704,10 +697,6 @@ export class GameController {
       );
       this.#bonusPoints = 0;
       this.#resolvedOddities = new Set();
-      if (this.#usesSharedTextTrial()) {
-        this.#consumeTrialBudget(TRIAL_COST_CASE, "case");
-      }
-
       // ── Populate all UI ────────────────────────────────────────────────────
       this.#populateTopBar();
       this.#buildSuspectsBoard();
@@ -727,7 +716,7 @@ export class GameController {
       this.#setLoadingStatus(
         this.#humanizeModelError(
           err,
-          "Generation failed. Repeat the attempt in a few seconds.",
+          "Generation failed. Repeat the attempt in a few seconds. For better experience, insert your own keys in Keys.",
         ),
       );
       // After a pause, return to menu so the player can try again
@@ -800,13 +789,6 @@ export class GameController {
     }
 
     if (!skipTrialPrompt && this.#shouldUseTrialMode()) {
-      if (this.#isTrialExpired()) {
-        this.#showNotification(
-          "Trial ended. Add your own Gemini or OpenAI key, plus ElevenLabs, in Keys.",
-        );
-        this.#openKeys();
-        return;
-      }
       this.#openConfirmOverlay(
         "For better experience, add an ElevenLabs key and either a Gemini key or an OpenAI key. For now, the shared trial is available without a time limit, though it may still be busy during provider spikes.",
         () => this.#handleNewCase(confirmLoss, true),
@@ -832,14 +814,6 @@ export class GameController {
   }
 
   #resumeSavedCase() {
-    if (this.#shouldUseTrialMode() && this.#isTrialExpired()) {
-      this.#showNotification(
-        "Trial ended. Add your own Gemini or OpenAI key, plus ElevenLabs, in Keys.",
-      );
-      this.#clearSavedCase();
-      this.#openKeys();
-      return;
-    }
     const payload = this.#readSavedCase();
     if (!payload?.snapshot) return;
     this.#restoreSavedCase(payload.snapshot);
@@ -3776,15 +3750,15 @@ export class GameController {
   #humanizeModelError(error, fallback) {
     const raw = String(error?.message ?? error ?? "");
     if (!INFINITE_SHARED_TRIAL && this.#shouldUseTrialMode() && this.#isTrialExpired()) {
-      return "Trial ended. Add your own Gemini or OpenAI key, plus ElevenLabs, in Keys.";
+      return "Trial ended. For better experience, insert your own Gemini or OpenAI key, plus ElevenLabs, in Keys.";
     }
     if (!INFINITE_SHARED_TRIAL && /prepayment credits are depleted/i.test(raw)) {
-      return "The shared trial has been exhausted for now. Add your own Gemini or OpenAI key in Keys, or try again later.";
+      return "The shared trial has been exhausted for now. For better experience, insert your own Gemini or OpenAI key, plus ElevenLabs, in Keys.";
     }
     if (
       /429|high demand|resource_exhausted|quota|rate limit|retry/i.test(raw)
     ) {
-      return "Free trial is busy right now. Repeat the attempt in a few seconds. While you wait, inspect passports or evidence.";
+      return "Free trial is busy right now. Repeat the attempt in a few seconds. For better experience, insert your own keys in Keys. While you wait, inspect passports or evidence.";
     }
     return fallback;
   }
