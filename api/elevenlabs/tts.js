@@ -1,4 +1,4 @@
-import { mintScribeToken } from "../../server/elevenlabs/scribeToken.js";
+import { synthesizeElevenLabsSpeech } from "../../server/elevenlabs/tts.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -22,12 +22,20 @@ export default async function handler(req, res) {
       return;
     }
 
-    const token = await mintScribeToken(apiKey);
+    const audioBuffer = await synthesizeElevenLabsSpeech({
+      apiKey,
+      voiceId: body?.voiceId,
+      text: body?.text,
+      voiceSettings: body?.voiceSettings,
+    });
+
+    res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Cache-Control", "no-store");
-    res.status(200).json({ token });
+    res.status(200).send(Buffer.from(audioBuffer));
   } catch (error) {
     res.status(500).json({
-      error: error instanceof Error ? error.message : "Failed to mint token.",
+      error:
+        error instanceof Error ? error.message : "Failed to synthesize speech.",
     });
   }
 }

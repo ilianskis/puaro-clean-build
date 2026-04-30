@@ -10,6 +10,7 @@
  * {
  *   elevenLabsKey:    string   — VITE_ELEVENLABS_API_KEY
  *   scribeTokenUrl:   string   — server endpoint for short-lived Scribe tokens
+ *   ttsUrl:           string   — server endpoint for TTS playback
  *   onTranscriptChunk: fn(str) — called with interim speech-to-text chunks
  *   onSpeechEnd:       fn(str) — called with final transcript when mic closes
  * }
@@ -86,6 +87,9 @@ export class VoiceController {
   /** @type {string} */
   #scribeTokenUrl;
 
+  /** @type {string} */
+  #ttsUrl;
+
   /** @type {Function|null} */
   #onTranscriptChunk;
 
@@ -159,17 +163,20 @@ export class VoiceController {
    * @param {object} opts
    * @param {string}   opts.elevenLabsKey
    * @param {string}   [opts.scribeTokenUrl]
+   * @param {string}   [opts.ttsUrl]
    * @param {Function} [opts.onTranscriptChunk]
    * @param {Function} [opts.onSpeechEnd]
    */
   constructor({
     elevenLabsKey,
     scribeTokenUrl,
+    ttsUrl,
     onTranscriptChunk,
     onSpeechEnd,
   } = {}) {
     this.#elevenLabsKey = elevenLabsKey ?? "";
     this.#scribeTokenUrl = scribeTokenUrl ?? "/api/elevenlabs/scribe-token";
+    this.#ttsUrl = ttsUrl ?? "/api/elevenlabs/tts";
     this.#onTranscriptChunk = onTranscriptChunk ?? null;
     this.#onSpeechEnd = onSpeechEnd ?? null;
 
@@ -180,6 +187,12 @@ export class VoiceController {
           "but suspect TTS will be skipped unless VITE_ELEVENLABS_API_KEY is set.",
       );
     }
+  }
+
+  setApiConfig({ elevenLabsKey, ttsUrl, scribeTokenUrl } = {}) {
+    this.#elevenLabsKey = elevenLabsKey ?? "";
+    if (ttsUrl) this.#ttsUrl = ttsUrl;
+    if (scribeTokenUrl) this.#scribeTokenUrl = scribeTokenUrl;
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -392,62 +405,103 @@ export class VoiceController {
     // Stop any current playback first
     this.stopSpeaking();
 
-    // ── Graceful no-op if no key ──────────────────────────────────────────────
-    if (!this.#elevenLabsKey) {
-      console.warn("[VoiceController] Skipping TTS — no ElevenLabs API key.");
-      // Simulate a short delay so UI state changes still feel natural
-      await this.#delay(text.length * 40); // ~40ms per character
-      return;
-    }
-
     const resolvedVoiceId = voiceId ?? this.#pickDefaultVoice();
-    const endpoint = `${ELEVENLABS_BASE}/text-to-speech/${resolvedVoiceId}`;
 
     this.#fetchAbortController = new AbortController();
 
-    // ── Fetch audio from ElevenLabs ───────────────────────────────────────────
-    let response;
-    try {
-      response = await fetch(endpoint, {
-        method: "POST",
-        signal: this.#fetchAbortController.signal,
-        headers: {
-          "xi-api-key": this.#elevenLabsKey,
-          "Content-Type": "application/json",
-          Accept: "audio/mpeg",
-        },
-        body: JSON.stringify({
-          text: text.trim(),
-          model_id: ELEVENLABS_MODEL,
-          voice_settings: VOICE_SETTINGS,
-        }),
-      });
-    } catch (err) {
-      if (err.name === "AbortError") {
-        console.info("[VoiceController] TTS fetch aborted.");
-        return;
-      }
-      throw new Error(`ElevenLabs fetch failed: ${err.message}`);
-    }
+    let blob = null;
 
-    if (!response.ok) {
-      let detail = response.statusText;
+    if (this.#ttsUrl) {
       try {
-        const body = await response.json();
-        detail = body?.detail?.message ?? body?.detail ?? detail;
-      } catch {
-        // ignore json parse error
+        const serverResponse = await fetch(this.#ttsUrl, {
+          method: "POST",
+          signal: this.#fetchAbortController.signal,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text: text.trim(),
+            voiceId: resolvedVoiceId,
+            voiceSettings: VOICE_SETTINGS,
+            customApiKey: this.#elevenLabsKey || undefined,
+          }),
+        });
+
+        if (serverResponse.ok) {
+          blob = await serverResponse.blob();
+        } else {
+          let detail = serverResponse.statusText;
+          try {
+            const body = await serverResponse.json();
+            detail = body?.error ?? body?.detail?.message ?? body?.detail ?? detail;
+          } catch {
+            // ignore
+          }
+          console.warn(
+            `[VoiceController] Server TTS route failed (${serverResponse.status}): ${detail}`,
+          );
+        }
+      } catch (err) {
+        if (err.name === "AbortError") {
+          console.info("[VoiceController] TTS fetch aborted.");
+          return;
+        }
+        console.warn(
+          "[VoiceController] Server TTS route unavailable, trying client-side fallback.",
+          err,
+        );
       }
-      throw new Error(`ElevenLabs API error ${response.status}: ${detail}`);
     }
 
-    // ── Decode blob → Object URL → HTMLAudioElement ───────────────────────────
-    let blob;
-    try {
-      blob = await response.blob();
-    } catch (err) {
-      if (err.name === "AbortError") return;
-      throw new Error(`Failed to read TTS audio blob: ${err.message}`);
+    if (!blob && !this.#elevenLabsKey) {
+      console.warn("[VoiceController] Skipping TTS — no ElevenLabs API key.");
+      await this.#delay(text.length * 40);
+      return;
+    }
+
+    if (!blob) {
+      const endpoint = `${ELEVENLABS_BASE}/text-to-speech/${resolvedVoiceId}`;
+      let response;
+      try {
+        response = await fetch(endpoint, {
+          method: "POST",
+          signal: this.#fetchAbortController.signal,
+          headers: {
+            "xi-api-key": this.#elevenLabsKey,
+            "Content-Type": "application/json",
+            Accept: "audio/mpeg",
+          },
+          body: JSON.stringify({
+            text: text.trim(),
+            model_id: ELEVENLABS_MODEL,
+            voice_settings: VOICE_SETTINGS,
+          }),
+        });
+      } catch (err) {
+        if (err.name === "AbortError") {
+          console.info("[VoiceController] TTS fetch aborted.");
+          return;
+        }
+        throw new Error(`ElevenLabs fetch failed: ${err.message}`);
+      }
+
+      if (!response.ok) {
+        let detail = response.statusText;
+        try {
+          const body = await response.json();
+          detail = body?.detail?.message ?? body?.detail ?? detail;
+        } catch {
+          // ignore json parse error
+        }
+        throw new Error(`ElevenLabs API error ${response.status}: ${detail}`);
+      }
+
+      try {
+        blob = await response.blob();
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        throw new Error(`Failed to read TTS audio blob: ${err.message}`);
+      }
     }
 
     // Play the audio and wait for it to finish
@@ -665,6 +719,9 @@ export class VoiceController {
           headers: {
             "Content-Type": "application/json",
           },
+          body: JSON.stringify({
+            customApiKey: this.#elevenLabsKey || undefined,
+          }),
         });
 
         if (response.ok) {

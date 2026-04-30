@@ -7,17 +7,16 @@ export default async function handler(req, res) {
     return;
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    res.status(500).json({
-      error:
-        "Missing GEMINI_API_KEY on the server. Add it to your Vercel environment variables.",
-    });
-    return;
-  }
-
   try {
     const body = await readJsonBody(req);
+    const apiKey = body?.customApiKey || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      res.status(500).json({
+        error:
+          "Missing GEMINI_API_KEY on the server. Gemini free tier still requires an API key in Google AI Studio. Add GEMINI_API_KEY to Vercel/local env or enter your own Gemini key.",
+      });
+      return;
+    }
     const text = await generateGeminiContent({
       apiKey,
       model: body?.model,

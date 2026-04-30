@@ -9,7 +9,12 @@
  */
 
 const GEMINI_CHAT_URL = "/api/gemini/generate-content";
-const MODEL = "gemini-2.5-flash";
+const OPENAI_CHAT_URL = "/api/openai/generate-content";
+// Default server-side model:
+// use Flash-Lite so the owner's server key can stay on Gemini's free tier
+// much longer. It is still a Flash-family model, just the cheaper one.
+const GEMINI_MODEL = "gemini-2.5-flash-lite";
+const OPENAI_MODEL = "gpt-4.1-mini";
 
 // The JSON schema we ask Gemma to generate for a full case.
 // FLAT structure (not deeply nested) for reliability with smaller models.
@@ -327,10 +332,35 @@ const FACE_FILES = [
 export class OllamaController {
   #model;
   #baseUrl;
+  #provider;
+  #geminiApiKey;
+  #openaiApiKey;
 
-  constructor({ model = MODEL, baseUrl = GEMINI_CHAT_URL } = {}) {
+  constructor({
+    model = GEMINI_MODEL,
+    baseUrl = GEMINI_CHAT_URL,
+    provider = "gemini",
+    geminiApiKey = "",
+    openaiApiKey = "",
+  } = {}) {
     this.#model = model;
     this.#baseUrl = baseUrl;
+    this.#provider = provider;
+    this.#geminiApiKey = geminiApiKey;
+    this.#openaiApiKey = openaiApiKey;
+  }
+
+  setRuntimeConfig({
+    provider = "gemini",
+    geminiApiKey = "",
+    openaiApiKey = "",
+  } = {}) {
+    this.#provider = provider === "openai" ? "openai" : "gemini";
+    this.#geminiApiKey = geminiApiKey ?? "";
+    this.#openaiApiKey = openaiApiKey ?? "";
+    this.#model = this.#provider === "openai" ? OPENAI_MODEL : GEMINI_MODEL;
+    this.#baseUrl =
+      this.#provider === "openai" ? OPENAI_CHAT_URL : GEMINI_CHAT_URL;
   }
 
   // ─── Case Generation ─────────────────────────────────────────────────────
@@ -559,6 +589,10 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
       messages,
       temperature,
       expectJson,
+      customApiKey:
+        this.#provider === "openai"
+          ? this.#openaiApiKey || undefined
+          : this.#geminiApiKey || undefined,
     };
 
     let response;
@@ -570,8 +604,8 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
       });
     } catch (networkErr) {
       throw new Error(
-        `[OllamaController] Cannot reach the Gemini server route. ` +
-          `Make sure /api/gemini/generate-content is available and GEMINI_API_KEY is configured. ` +
+        `[OllamaController] Cannot reach the ${this.#provider} server route. ` +
+          `Make sure ${this.#baseUrl} is available and the matching API key is configured. ` +
           `Network error: ${networkErr.message}`,
       );
     }
@@ -579,7 +613,7 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
     if (!response.ok) {
       const errText = await response.text().catch(() => response.statusText);
       throw new Error(
-        `[OllamaController] Gemini API error ${response.status}: ${errText}`,
+        `[OllamaController] ${this.#provider} API error ${response.status}: ${errText}`,
       );
     }
 
@@ -587,7 +621,7 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
     const content = data?.text;
 
     if (!content) {
-      throw new Error("[OllamaController] Empty response from Gemini.");
+      throw new Error(`[OllamaController] Empty response from ${this.#provider}.`);
     }
 
     return content;

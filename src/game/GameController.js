@@ -32,9 +32,19 @@ const SUSPECT_CALL_SUSPICION_PER_TURN = 3; // base suspicion bump each call turn
 const TYPEWRITER_SPEED_MS = 26;
 const SAVE_KEY = "puaro-save-v2";
 const SETTINGS_KEY = "puaro-settings-v1";
+const TRIAL_KEY = "puaro-trial-v1";
 const AUTOSAVE_INTERVAL_MS = 12000;
 const ANALYSIS_DELAY_MIN_MS = 60_000;
 const ANALYSIS_DELAY_MAX_MS = 120_000;
+const TRIAL_DURATION_MS = 10 * 60_000;
+const TRIAL_BUDGET_TOTAL = 170;
+const TRIAL_COST_CASE = 110;
+const TRIAL_COST_CALL = 12;
+const TRIAL_COST_ANALYSIS = 6;
+const DISABLE_TRIAL =
+  typeof __PUARO_DISABLE_TRIAL__ !== "undefined"
+    ? Boolean(__PUARO_DISABLE_TRIAL__)
+    : false;
 
 const LOADING_MESSAGES = [
   "Reviewing crime scene photographs…",
@@ -86,10 +96,16 @@ export class GameController {
     muteSounds: false,
     muteVoices: false,
     muteMusic: false,
+    geminiApiKey: "",
+    openaiApiKey: "",
+    elevenLabsApiKey: "",
   };
 
   /** Pending confirm action for the noir confirm overlay */
   #confirmAction = null;
+
+  /** Trial session state for keyless play */
+  #trialState = null;
 
   // ── Case-scoped objects (reset each game) ──────────────────────────────────
 
@@ -200,6 +216,8 @@ export class GameController {
     this.#cacheDOMRefs();
     this.#initSubControllers();
     this.#loadSettings();
+    this.#loadTrialState();
+    this.#applyApiKeys();
     this.#applySettings();
     this.#bindEvents();
     this.#bindPersistenceEvents();
@@ -231,6 +249,7 @@ export class GameController {
       btnMenuContinue: q("btn-menu-continue"),
       btnMenuDifficulty: q("btn-menu-difficulty"),
       btnMenuOptions: q("btn-menu-options"),
+      btnMenuKeys: q("btn-menu-keys"),
       menuSaveNote: q("menu-save-note"),
       menuDifficultyNote: q("menu-difficulty-note"),
       topbarDifficultyNote: q("topbar-difficulty-note"),
@@ -253,6 +272,7 @@ export class GameController {
       btnArrest: q("btn-arrest"),
       btnNewCase: q("btn-new-case"),
       btnOptions: q("btn-options"),
+      btnKeys: q("btn-keys"),
 
       // Suspects sidebar
       victimCardName: q("victim-card-name"),
@@ -347,6 +367,14 @@ export class GameController {
       btnCloseOptions: q("btn-close-options"),
       overlayDifficulty: q("overlay-difficulty"),
       btnCloseDifficulty: q("btn-close-difficulty"),
+      overlayKeys: q("overlay-keys"),
+      btnCloseKeys: q("btn-close-keys"),
+      btnSaveKeys: q("btn-save-keys"),
+      btnClearKeys: q("btn-clear-keys"),
+      inputGeminiKey: q("input-gemini-key"),
+      inputOpenaiKey: q("input-openai-key"),
+      inputElevenLabsKey: q("input-elevenlabs-key"),
+      keysStatusText: q("keys-status-text"),
       difficultyPillRow: q("difficulty-pill-row"),
       toggleSfx: q("toggle-sfx"),
       toggleVoices: q("toggle-voices"),
@@ -393,6 +421,7 @@ export class GameController {
     this.#voice = new VoiceController({
       elevenLabsKey,
       scribeTokenUrl: "/api/elevenlabs/scribe-token",
+      ttsUrl: "/api/elevenlabs/tts",
       onTranscriptChunk: (text) => this.#handleSpeechChunk(text),
       onSpeechEnd: () => this.#handleSpeechEnd(),
     });
@@ -416,10 +445,12 @@ export class GameController {
     e.btnMenuContinue?.addEventListener("click", () => this.#resumeSavedCase());
     e.btnMenuDifficulty?.addEventListener("click", () => this.#openDifficulty());
     e.btnMenuOptions?.addEventListener("click", () => this.#openOptions());
+    e.btnMenuKeys?.addEventListener("click", () => this.#openKeys());
     e.btnNewCase.addEventListener("click", () => this.#handleNewCase(true));
     e.btnWinNewCase.addEventListener("click", () => this.#handleNewCase());
     e.btnLoseNewCase.addEventListener("click", () => this.#handleNewCase());
     e.btnOptions?.addEventListener("click", () => this.#openOptions());
+    e.btnKeys?.addEventListener("click", () => this.#openKeys());
 
     // ── Top bar ──────────────────────────────────────────────────────────────
     e.btnComputer.addEventListener("click", () => this.#openComputer());
@@ -477,9 +508,15 @@ export class GameController {
     e.btnCloseDifficulty?.addEventListener("click", () =>
       this.#closeDifficulty(),
     );
+    e.btnCloseKeys?.addEventListener("click", () => this.#closeKeys());
     e.overlayDifficulty?.addEventListener("click", (ev) => {
       if (ev.target === e.overlayDifficulty) this.#closeDifficulty();
     });
+    e.overlayKeys?.addEventListener("click", (ev) => {
+      if (ev.target === e.overlayKeys) this.#closeKeys();
+    });
+    e.btnSaveKeys?.addEventListener("click", () => this.#saveKeysFromInputs());
+    e.btnClearKeys?.addEventListener("click", () => this.#clearStoredKeys());
     e.toggleSfx?.addEventListener("click", () =>
       this.#updateSettings({ muteSounds: !this.#settings.muteSounds }),
     );
@@ -630,6 +667,16 @@ export class GameController {
     this.#setPhoneState("disabled");
     this.#clearAnalysisTimers();
 
+    if (this.#usesSharedTextTrial()) {
+      this.#ensureTrialSessionStarted();
+      if (this.#isTrialExpired()) {
+        this.#endTrialSession(
+          "Trial ended. Add your own Gemini or OpenAI key, plus ElevenLabs, to keep playing.",
+        );
+        return;
+      }
+    }
+
     // Cycle loading status messages while the case generator works
     let msgIdx = 0;
     this.#setLoadingStatus(LOADING_MESSAGES[0]);
@@ -656,6 +703,9 @@ export class GameController {
       );
       this.#bonusPoints = 0;
       this.#resolvedOddities = new Set();
+      if (this.#usesSharedTextTrial()) {
+        this.#consumeTrialBudget(TRIAL_COST_CASE, "case");
+      }
 
       // ── Populate all UI ────────────────────────────────────────────────────
       this.#populateTopBar();
@@ -673,7 +723,12 @@ export class GameController {
     } catch (err) {
       clearInterval(msgTimer);
       console.error("[GameController] Case generation failed:", err);
-      this.#setLoadingStatus(`Generation failed: ${err.message}`);
+      this.#setLoadingStatus(
+        this.#humanizeModelError(
+          err,
+          "Generation failed. Repeat the attempt in a few seconds.",
+        ),
+      );
       // After a pause, return to menu so the player can try again
       await this.#delay(3000);
       this.#setState("menu");
@@ -734,14 +789,30 @@ export class GameController {
   // CASE LIFECYCLE
   // ───────────────────────────────────────────────────────────────────────────
 
-  #handleNewCase(confirmLoss = false) {
+  #handleNewCase(confirmLoss = false, skipTrialPrompt = false) {
     if (confirmLoss && this.#state === "investigating" && this.#caseState) {
       this.#openConfirmOverlay(
         "Current progress will be lost if you open another case file.",
-        () => this.#handleNewCase(false),
+        () => this.#handleNewCase(false, skipTrialPrompt),
       );
       return;
     }
+
+    if (!skipTrialPrompt && this.#shouldUseTrialMode()) {
+      if (this.#isTrialExpired()) {
+        this.#showNotification(
+          "Trial ended. Add your own Gemini or OpenAI key, plus ElevenLabs, in Keys.",
+        );
+        this.#openKeys();
+        return;
+      }
+      this.#openConfirmOverlay(
+        "For better experience, add an ElevenLabs key and either a Gemini key or an OpenAI key. You can still play on a limited shared trial for about 5 to 10 minutes. This trial is one-time and will not reset after reload.",
+        () => this.#handleNewCase(confirmLoss, true),
+      );
+      return;
+    }
+
     this.#clearSavedCase();
     this.#clearAnalysisTimers();
     this.#activeDossierSuspectId = null;
@@ -760,6 +831,14 @@ export class GameController {
   }
 
   #resumeSavedCase() {
+    if (this.#shouldUseTrialMode() && this.#isTrialExpired()) {
+      this.#showNotification(
+        "Trial ended. Add your own Gemini or OpenAI key, plus ElevenLabs, in Keys.",
+      );
+      this.#clearSavedCase();
+      this.#openKeys();
+      return;
+    }
     const payload = this.#readSavedCase();
     if (!payload?.snapshot) return;
     this.#restoreSavedCase(payload.snapshot);
@@ -921,6 +1000,18 @@ export class GameController {
         result.result,
         result.belongsToId,
       );
+      if (this.#usesSharedTextTrial()) {
+        const stillActive = this.#consumeTrialBudget(
+          TRIAL_COST_ANALYSIS,
+          "analysis",
+        );
+        if (!stillActive) {
+          this.#endTrialSession(
+            "Trial ended. Add your own Gemini or OpenAI key, plus ElevenLabs, to continue the investigation.",
+          );
+          return;
+        }
+      }
       this.#renderEvidenceItems();
       this.#persistProgress();
       this.#showNotification("Lab report returned");
@@ -930,7 +1021,12 @@ export class GameController {
       item.analysisDueAt = null;
       this.#renderEvidenceItems();
       this.#persistProgress();
-      this.#showNotification(`Analysis failed: ${err.message}`);
+      this.#showNotification(
+        this.#humanizeModelError(
+          err,
+          "Analysis paused. Repeat the attempt in a few seconds.",
+        ),
+      );
     }
   }
 
@@ -1804,9 +1900,23 @@ export class GameController {
       } else {
         await this.#handleWitnessTurn();
       }
+      if (this.#usesSharedTextTrial() || this.#usesSharedVoiceTrial()) {
+        const stillActive = this.#consumeTrialBudget(TRIAL_COST_CALL, "call");
+        if (!stillActive) {
+          this.#endTrialSession(
+            "Trial ended. Add your own Gemini or OpenAI key, plus ElevenLabs, to continue the investigation.",
+          );
+          return;
+        }
+      }
     } catch (err) {
       console.error("[GameController] handleSpeechEnd error:", err);
-      this.#setRecStatus(`Error: ${err.message}`);
+      this.#setRecStatus(
+        this.#humanizeModelError(
+          err,
+          "Repeat the attempt in a few seconds.",
+        ),
+      );
       if (this.#activeCall) this.#setPhoneState("ready");
     }
   }
@@ -3499,6 +3609,172 @@ export class GameController {
       });
   }
 
+  #renderKeysUI(statusMessage = "") {
+    const e = this.#els;
+    if (e.inputGeminiKey) {
+      e.inputGeminiKey.value = this.#settings.geminiApiKey ?? "";
+    }
+    if (e.inputOpenaiKey) {
+      e.inputOpenaiKey.value = this.#settings.openaiApiKey ?? "";
+    }
+    if (e.inputElevenLabsKey) {
+      e.inputElevenLabsKey.value = this.#settings.elevenLabsApiKey ?? "";
+    }
+    if (e.keysStatusText) {
+      e.keysStatusText.textContent = statusMessage;
+    }
+  }
+
+  #applyApiKeys() {
+    const geminiApiKey = (this.#settings.geminiApiKey ?? "").trim();
+    const openaiApiKey = (this.#settings.openaiApiKey ?? "").trim();
+    const provider = geminiApiKey ? "gemini" : openaiApiKey ? "openai" : "gemini";
+    this.#ollama?.setRuntimeConfig?.({
+      provider,
+      geminiApiKey,
+      openaiApiKey,
+    });
+    this.#voice?.setApiConfig?.({
+      elevenLabsKey: (this.#settings.elevenLabsApiKey ?? "").trim(),
+    });
+  }
+
+  #loadTrialState() {
+    try {
+      const raw = window.localStorage.getItem(TRIAL_KEY);
+      this.#trialState = raw ? JSON.parse(raw) : null;
+    } catch {
+      this.#trialState = null;
+    }
+  }
+
+  #saveTrialState() {
+    try {
+      if (!this.#trialState) {
+        window.localStorage.removeItem(TRIAL_KEY);
+        return;
+      }
+      window.localStorage.setItem(TRIAL_KEY, JSON.stringify(this.#trialState));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  #hasUserGeminiKey() {
+    return Boolean((this.#settings.geminiApiKey ?? "").trim());
+  }
+
+  #hasUserOpenAiKey() {
+    return Boolean((this.#settings.openaiApiKey ?? "").trim());
+  }
+
+  #hasUserTextKey() {
+    return this.#hasUserGeminiKey() || this.#hasUserOpenAiKey();
+  }
+
+  #hasUserElevenLabsKey() {
+    return Boolean((this.#settings.elevenLabsApiKey ?? "").trim());
+  }
+
+  #usesSharedTextTrial() {
+    return !this.#hasUserTextKey();
+  }
+
+  #usesSharedVoiceTrial() {
+    return !this.#hasUserElevenLabsKey();
+  }
+
+  #shouldUseTrialMode() {
+    if (DISABLE_TRIAL) return false;
+    return this.#usesSharedTextTrial() || this.#usesSharedVoiceTrial();
+  }
+
+  #getTrialState() {
+    if (!this.#trialState || typeof this.#trialState !== "object") {
+      this.#trialState = {
+        startedAt: null,
+        expiresAt: null,
+        budgetRemaining: TRIAL_BUDGET_TOTAL,
+        exhausted: false,
+        caseGenerations: 0,
+        callTurns: 0,
+        analysisRuns: 0,
+      };
+    }
+    return this.#trialState;
+  }
+
+  #ensureTrialSessionStarted() {
+    const trial = this.#getTrialState();
+    if (!trial.startedAt) {
+      const now = Date.now();
+      trial.startedAt = now;
+      trial.expiresAt = now + TRIAL_DURATION_MS;
+      this.#saveTrialState();
+    }
+    return trial;
+  }
+
+  #isTrialExpired() {
+    if (DISABLE_TRIAL) return false;
+    const trial = this.#getTrialState();
+    return Boolean(
+      trial.exhausted ||
+        (trial.expiresAt && Date.now() >= Number(trial.expiresAt)) ||
+        Number(trial.budgetRemaining ?? 0) <= 0,
+    );
+  }
+
+  #consumeTrialBudget(amount, kind = "usage") {
+    const trial = this.#ensureTrialSessionStarted();
+    if (this.#isTrialExpired()) return false;
+
+    trial.budgetRemaining = Math.max(
+      0,
+      Number(trial.budgetRemaining ?? TRIAL_BUDGET_TOTAL) - amount,
+    );
+    if (kind === "case") trial.caseGenerations = (trial.caseGenerations ?? 0) + 1;
+    if (kind === "call") trial.callTurns = (trial.callTurns ?? 0) + 1;
+    if (kind === "analysis") trial.analysisRuns = (trial.analysisRuns ?? 0) + 1;
+
+    if (trial.budgetRemaining <= 0) {
+      trial.exhausted = true;
+    }
+
+    this.#saveTrialState();
+    return !trial.exhausted;
+  }
+
+  #endTrialSession(message) {
+    const trial = this.#getTrialState();
+    trial.exhausted = true;
+    trial.budgetRemaining = 0;
+    this.#saveTrialState();
+    this.#clearSavedCase();
+    this.#activeCall = null;
+    this.#pendingCallTarget = null;
+    this.#dialInProgress = false;
+    this.#setPhoneState("disabled");
+    this.#showNotification(message);
+    this.#setState("menu");
+  }
+
+  #humanizeModelError(error, fallback) {
+    const raw = String(error?.message ?? error ?? "");
+    if (this.#shouldUseTrialMode() && this.#isTrialExpired()) {
+      return "Trial ended. Add your own Gemini or OpenAI key, plus ElevenLabs, in Keys.";
+    }
+    if (/prepayment credits are depleted/i.test(raw)) {
+      return "The shared trial has been exhausted for now. Add your own Gemini or OpenAI key in Keys, or try again later.";
+    }
+    if (
+      /429|high demand|resource_exhausted|quota|rate limit|retry/i.test(raw)
+    ) {
+      return "Free trial is busy right now. Repeat the attempt in a few seconds. While you wait, inspect passports or evidence.";
+    }
+    return fallback;
+  }
+
   #updateSettings(patch) {
     this.#settings = {
       ...this.#settings,
@@ -3525,6 +3801,49 @@ export class GameController {
 
   #closeDifficulty() {
     this.#els.overlayDifficulty?.classList.remove("open");
+  }
+
+  #openKeys() {
+    this.#renderKeysUI();
+    this.#els.overlayKeys?.classList.add("open");
+  }
+
+  #closeKeys() {
+    this.#els.overlayKeys?.classList.remove("open");
+  }
+
+  #saveKeysFromInputs() {
+    const geminiApiKey = this.#els.inputGeminiKey?.value?.trim() ?? "";
+    const openaiApiKey = this.#els.inputOpenaiKey?.value?.trim() ?? "";
+    const elevenLabsApiKey =
+      this.#els.inputElevenLabsKey?.value?.trim() ?? "";
+
+    this.#settings = {
+      ...this.#settings,
+      geminiApiKey,
+      openaiApiKey,
+      elevenLabsApiKey,
+    };
+    this.#applyApiKeys();
+    this.#saveSettings();
+    const activeTextProvider = geminiApiKey
+      ? "Gemini active"
+      : openaiApiKey
+        ? "OpenAI active"
+        : "Shared text trial active";
+    this.#renderKeysUI(activeTextProvider);
+  }
+
+  #clearStoredKeys() {
+    this.#settings = {
+      ...this.#settings,
+      geminiApiKey: "",
+      openaiApiKey: "",
+      elevenLabsApiKey: "",
+    };
+    this.#applyApiKeys();
+    this.#saveSettings();
+    this.#renderKeysUI("Keys cleared");
   }
 
   #openConfirmOverlay(message, onAccept) {
