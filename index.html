@@ -292,6 +292,7 @@
                 color: var(--paper-dark);
                 opacity: 0.8;
                 text-align: center;
+                animation: menu-glow-note 2.6s ease-in-out infinite;
             }
 
             .menu-start-btn {
@@ -355,12 +356,41 @@
                     color 0.15s,
                     border-color 0.15s,
                     opacity 0.15s;
+                animation: menu-glow-link 2.3s ease-in-out infinite;
             }
 
             .menu-tutorial-link:hover {
                 color: var(--paper);
                 border-color: rgba(201, 186, 160, 0.62);
                 opacity: 1;
+            }
+
+            @keyframes menu-glow-note {
+                0%,
+                100% {
+                    opacity: 0.72;
+                    text-shadow: 0 0 0 rgba(201, 186, 160, 0);
+                }
+                50% {
+                    opacity: 1;
+                    text-shadow:
+                        0 0 10px rgba(201, 186, 160, 0.22),
+                        0 0 18px rgba(200, 148, 26, 0.12);
+                }
+            }
+
+            @keyframes menu-glow-link {
+                0%,
+                100% {
+                    text-shadow: 0 0 0 rgba(200, 148, 26, 0);
+                    border-bottom-color: rgba(200, 148, 26, 0.34);
+                }
+                50% {
+                    text-shadow:
+                        0 0 10px rgba(200, 148, 26, 0.36),
+                        0 0 24px rgba(200, 148, 26, 0.16);
+                    border-bottom-color: rgba(201, 186, 160, 0.72);
+                }
             }
 
             .menu-secondary-actions {
