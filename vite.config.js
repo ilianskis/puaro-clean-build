@@ -1,4 +1,6 @@
 import { defineConfig, loadEnv } from "vite";
+import fs from "node:fs";
+import path from "node:path";
 
 import { mintScribeToken } from "./server/elevenlabs/scribeToken.js";
 import { synthesizeElevenLabsSpeech } from "./server/elevenlabs/tts.js";
@@ -234,6 +236,24 @@ async function readJsonBody(req) {
   return rawBody ? JSON.parse(rawBody) : {};
 }
 
+function copyRuntimeAssetsPlugin() {
+  return {
+    name: "puaro-copy-runtime-assets",
+    closeBundle() {
+      const root = process.cwd();
+      const runtimeDirs = ["buttons", "evidence", "faces", "sfx"];
+
+      runtimeDirs.forEach((dirName) => {
+        const sourceDir = path.resolve(root, "assets", dirName);
+        const targetDir = path.resolve(root, "dist", "assets", dirName);
+        if (!fs.existsSync(sourceDir)) return;
+        fs.mkdirSync(path.dirname(targetDir), { recursive: true });
+        fs.cpSync(sourceDir, targetDir, { recursive: true });
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const readEnv = () => loadEnv(mode, process.cwd(), "");
   const isTruthy = (value) =>
@@ -261,6 +281,7 @@ export default defineConfig(({ mode }) => {
       elevenLabsTtsDevMiddleware(getElevenLabsApiKey),
       geminiDevMiddleware(getGeminiApiKey),
       openAiDevMiddleware(getOpenAiApiKey),
+      copyRuntimeAssetsPlugin(),
     ],
     define: {
       __PUARO_DISABLE_TRIAL__: JSON.stringify(getDisableTrial()),

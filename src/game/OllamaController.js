@@ -595,33 +595,67 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
           : this.#geminiApiKey || undefined,
     };
 
+    try {
+      return await this.#requestChat(this.#baseUrl, this.#provider, body);
+    } catch (primaryErr) {
+      const shouldFallbackToOpenAi =
+        this.#provider === "gemini" &&
+        !this.#geminiApiKey &&
+        /429|high demand|resource_exhausted|quota|rate limit|prepayment credits are depleted|503|500/i.test(
+          String(primaryErr?.message ?? primaryErr ?? ""),
+        );
+
+      if (!shouldFallbackToOpenAi) {
+        throw primaryErr;
+      }
+
+      const fallbackBody = {
+        ...body,
+        model: OPENAI_MODEL,
+        customApiKey: this.#openaiApiKey || undefined,
+      };
+
+      return this.#requestChat(
+        OPENAI_CHAT_URL,
+        "openai",
+        fallbackBody,
+        primaryErr,
+      );
+    }
+  }
+
+  async #requestChat(baseUrl, providerLabel, body, previousError = null) {
     let response;
     try {
-      response = await fetch(this.#baseUrl, {
+      response = await fetch(baseUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
     } catch (networkErr) {
+      if (previousError) throw previousError;
       throw new Error(
-        `[OllamaController] Cannot reach the ${this.#provider} server route. ` +
-          `Make sure ${this.#baseUrl} is available and the matching API key is configured. ` +
+        `[OllamaController] Cannot reach the ${providerLabel} server route. ` +
+          `Make sure ${baseUrl} is available and the matching API key is configured. ` +
           `Network error: ${networkErr.message}`,
       );
     }
 
     if (!response.ok) {
       const errText = await response.text().catch(() => response.statusText);
-      throw new Error(
-        `[OllamaController] ${this.#provider} API error ${response.status}: ${errText}`,
+      const error = new Error(
+        `[OllamaController] ${providerLabel} API error ${response.status}: ${errText}`,
       );
+      if (previousError) throw previousError;
+      throw error;
     }
 
     const data = await response.json();
     const content = data?.text;
 
     if (!content) {
-      throw new Error(`[OllamaController] Empty response from ${this.#provider}.`);
+      if (previousError) throw previousError;
+      throw new Error(`[OllamaController] Empty response from ${providerLabel}.`);
     }
 
     return content;
