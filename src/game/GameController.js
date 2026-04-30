@@ -177,13 +177,8 @@ export class GameController {
     { id: "wrongPhoto", label: "Wrong passport photo", section: "PASSPORT" },
     { id: "falsifiedDoc", label: "Falsified passport", section: "PASSPORT" },
     {
-      id: "bloodVictim",
-      label: "Blood on victim's clothes",
-      section: "EVIDENCE",
-    },
-    {
-      id: "hairVictim",
-      label: "Hair on victim's clothes",
+      id: "confirmedEvidence",
+      label: "Confirmed evidence found",
       section: "EVIDENCE",
     },
     { id: "wrongAlibi", label: "Wrong alibi", section: "BEHAVIOUR" },

@@ -14,6 +14,7 @@ const OPENAI_CHAT_URL = "/api/openai/generate-content";
 // use Flash-Lite so the owner's server key can stay on Gemini's free tier
 // much longer. It is still a Flash-family model, just the cheaper one.
 const GEMINI_MODEL = "gemini-2.5-flash-lite";
+const GEMINI_FALLBACK_MODELS = ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite"];
 const OPENAI_MODEL = "gpt-4.1-mini";
 
 // The JSON schema we ask Gemma to generate for a full case.
@@ -584,7 +585,7 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
    * @returns {Promise<string>} raw response text
    */
   async #chat(messages, { temperature = 0.8, expectJson = false } = {}) {
-    const body = {
+    const baseBody = {
       model: this.#model,
       messages,
       temperature,
@@ -596,7 +597,10 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
     };
 
     try {
-      return await this.#requestChat(this.#baseUrl, this.#provider, body);
+      if (this.#provider === "gemini" && this.#geminiApiKey) {
+        return await this.#requestGeminiWithUserKeyFallback(baseBody);
+      }
+      return await this.#requestChat(this.#baseUrl, this.#provider, baseBody);
     } catch (primaryErr) {
       const shouldFallbackToOpenAi =
         this.#provider === "gemini" &&
@@ -610,7 +614,7 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
       }
 
       const fallbackBody = {
-        ...body,
+        ...baseBody,
         model: OPENAI_MODEL,
         customApiKey: this.#openaiApiKey || undefined,
       };
@@ -622,6 +626,27 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
         primaryErr,
       );
     }
+  }
+
+  async #requestGeminiWithUserKeyFallback(baseBody) {
+    let lastError = null;
+    for (const model of GEMINI_FALLBACK_MODELS) {
+      try {
+        return await this.#requestChat(this.#baseUrl, "gemini", {
+          ...baseBody,
+          model,
+          customApiKey: this.#geminiApiKey || undefined,
+        });
+      } catch (error) {
+        lastError = error;
+        const retryable =
+          /429|resource_exhausted|quota|rate limit|prepayment credits are depleted|503|404|not found|unsupported|not available/i.test(
+            String(error?.message ?? error ?? ""),
+          );
+        if (!retryable) break;
+      }
+    }
+    throw lastError ?? new Error("[OllamaController] Gemini request failed.");
   }
 
   async #requestChat(baseUrl, providerLabel, body, previousError = null) {
