@@ -1732,7 +1732,7 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
               analysisResult:
                 "The vial contains the same toxic compound identified in the victim. Trace residue on the rim shows recent use.",
               belongsToId: suspect.id,
-              spriteSrc: "/assets/evidence/vial.png",
+              spriteSrc: "./assets/evidence/vial.png",
               recoveredFromId: suspect.id,
               recoveredFromLabel: `${suspect.name} ${suspect.surname}`,
             }
@@ -1746,7 +1746,7 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
               analysisResult:
                 "The liquid is only a cough remedy diluted with water. No lethal substance was present.",
               belongsToId: null,
-              spriteSrc: "/assets/evidence/vial.png",
+              spriteSrc: "./assets/evidence/vial.png",
               recoveredFromId: suspect.id,
               recoveredFromLabel: `${suspect.name} ${suspect.surname}`,
             },
@@ -1768,7 +1768,7 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
               analysisResult:
                 "Tool marks and metal smear match the projectile recovered from the victim's body.",
               belongsToId: suspect.id,
-              spriteSrc: "/assets/evidence/bullet.png",
+              spriteSrc: "./assets/evidence/bullet.png",
               recoveredFromId: suspect.id,
               recoveredFromLabel: `${suspect.name} ${suspect.surname}`,
             }
@@ -1782,7 +1782,7 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
               analysisResult:
                 "The slug is inert display brass. It has never been fired and is unrelated to the murder.",
               belongsToId: null,
-              spriteSrc: "/assets/evidence/bullet.png",
+              spriteSrc: "./assets/evidence/bullet.png",
               recoveredFromId: suspect.id,
               recoveredFromLabel: `${suspect.name} ${suspect.surname}`,
             },
@@ -1800,7 +1800,7 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
               analysisResult:
                 "Microscopic traces of the victim's blood were found near the hinge. The blade was cleaned in haste.",
               belongsToId: suspect.id,
-              spriteSrc: "/assets/evidence/razor_blade.png",
+              spriteSrc: "./assets/evidence/razor_blade.png",
               recoveredFromId: suspect.id,
               recoveredFromLabel: `${suspect.name} ${suspect.surname}`,
             }
@@ -1814,7 +1814,7 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
               analysisResult:
                 "The blade is factory-clean and has not been used on tissue or fabric. It is ordinary grooming stock.",
               belongsToId: null,
-              spriteSrc: "/assets/evidence/razor_blade.png",
+              spriteSrc: "./assets/evidence/razor_blade.png",
               recoveredFromId: suspect.id,
               recoveredFromLabel: `${suspect.name} ${suspect.surname}`,
             },
@@ -1834,7 +1834,7 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
               analysisResult:
                 "The hair sample matches the trace found on the victim. It was cut recently and stored deliberately.",
               belongsToId: suspect.id,
-              spriteSrc: "/assets/evidence/hair.png",
+              spriteSrc: "./assets/evidence/hair.png",
               recoveredFromId: suspect.id,
               recoveredFromLabel: `${suspect.name} ${suspect.surname}`,
             }
@@ -1848,7 +1848,7 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
               analysisResult:
                 "The fibers are common upholstery strands from public transit seating. They do not tie the suspect to the killing.",
               belongsToId: null,
-              spriteSrc: "/assets/evidence/textile.png",
+              spriteSrc: "./assets/evidence/textile.png",
               recoveredFromId: suspect.id,
               recoveredFromLabel: `${suspect.name} ${suspect.surname}`,
             },
@@ -1875,42 +1875,42 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
       {
         label: "Wallet",
         description: `A worn wallet packed with loyalty cards and folded bills belonging to ${suspect.name} ${suspect.surname}.`,
-        spriteSrc: "/assets/evidence/junk_wallet.png",
+        spriteSrc: "./assets/evidence/junk_wallet.png",
       },
       {
         label: "Old Lighter",
         description: "A scratched lighter with the paint worn off.",
-        spriteSrc: "/assets/evidence/junk_lighter.png",
+        spriteSrc: "./assets/evidence/junk_lighter.png",
       },
       {
         label: "Key Ring",
         description: "A noisy ring of keys and one bent tag.",
-        spriteSrc: "/assets/evidence/junk_keys.png",
+        spriteSrc: "./assets/evidence/junk_keys.png",
       },
       {
         label: "Pods Case",
         description: "A cheap pods case with one missing earbud.",
-        spriteSrc: "/assets/evidence/junk_pods1.png",
+        spriteSrc: "./assets/evidence/junk_pods1.png",
       },
       {
         label: "Pods Case",
         description: "A scuffed pods case with cracked plastic.",
-        spriteSrc: "/assets/evidence/junk_pods2.png",
+        spriteSrc: "./assets/evidence/junk_pods2.png",
       },
       {
         label: "Cigarettes",
         description: "A soft pack of cigarettes with two left inside.",
-        spriteSrc: "/assets/evidence/junk_cigarrets.png",
+        spriteSrc: "./assets/evidence/junk_cigarrets.png",
       },
       {
         label: "Charger",
         description: "A cheap charging brick with frayed cable wrapping.",
-        spriteSrc: "/assets/evidence/junk_charger1.png",
+        spriteSrc: "./assets/evidence/junk_charger1.png",
       },
       {
         label: "Charger",
         description: "A knock-off charger with cracked plastic casing.",
-        spriteSrc: "/assets/evidence/junk_chager2.png",
+        spriteSrc: "./assets/evidence/junk_chager2.png",
       },
     ];
 
@@ -1956,7 +1956,7 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
         subtitle: "paper",
         description:
           paperDescriptions[(index + this.#numericIdSeed(ownerId)) % paperDescriptions.length],
-        spriteSrc: `/assets/evidence/${index % 2 === 0 ? "junk_paper1.png" : "junk_paper2.png"}`,
+        spriteSrc: `./assets/evidence/${index % 2 === 0 ? "junk_paper1.png" : "junk_paper2.png"}`,
       };
     });
   }
@@ -2041,14 +2041,14 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
 
   #spriteForEvidenceType(type) {
     const normalized = String(type ?? "").toLowerCase();
-    if (normalized === "hair") return "/assets/evidence/hair.png";
-    if (normalized === "fiber") return "/assets/evidence/textile.png";
-    if (normalized === "weapon") return "/assets/evidence/razor_blade.png";
-    if (normalized === "chemical") return "/assets/evidence/vial.png";
+    if (normalized === "hair") return "./assets/evidence/hair.png";
+    if (normalized === "fiber") return "./assets/evidence/textile.png";
+    if (normalized === "weapon") return "./assets/evidence/razor_blade.png";
+    if (normalized === "chemical") return "./assets/evidence/vial.png";
     if (normalized === "blood" || normalized === "fingerprint" || normalized === "footprint") {
-      return "/assets/evidence/textile.png";
+      return "./assets/evidence/textile.png";
     }
-    return "/assets/evidence/hair.png";
+    return "./assets/evidence/hair.png";
   }
 
   #numericIdSeed(id) {

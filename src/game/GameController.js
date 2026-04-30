@@ -2337,7 +2337,7 @@ export class GameController {
 
     const photoFile = record.passportPhotoFile;
     const photoSrc = photoFile
-      ? `/assets/faces/${this.#escapeHtml(photoFile)}.jpg`
+      ? `./assets/faces/${this.#escapeHtml(photoFile)}.jpg`
       : null;
 
     return `
@@ -2774,7 +2774,7 @@ export class GameController {
         sceneCategory: "analysis",
         label: item.label ?? `Evidence ${index + 1}`,
         subtitle: item.subtitle ?? "item",
-        spriteSrc: item.spriteSrc ?? "/assets/evidence/hair.png",
+        spriteSrc: item.spriteSrc ?? "./assets/evidence/hair.png",
         xPercent: 10 + (index % 4) * 20,
         yPercent: 12 + Math.floor(index / 4) * 24,
         rotation: 0,
@@ -2795,7 +2795,7 @@ export class GameController {
         label: "Paper",
         subtitle: "paper",
         description: "A messy stack of paper scraps and receipts.",
-        spriteSrc: "/assets/evidence/junk_paper1.png",
+        spriteSrc: "./assets/evidence/junk_paper1.png",
         xPercent: 8,
         yPercent: 12,
         rotation: -3,
@@ -2807,7 +2807,7 @@ export class GameController {
         label: "Paper",
         subtitle: "paper",
         description: "A messy stack of receipts and paper scraps.",
-        spriteSrc: "/assets/evidence/junk_paper2.png",
+        spriteSrc: "./assets/evidence/junk_paper2.png",
         xPercent: 31,
         yPercent: 18,
         rotation: 4,
@@ -2890,7 +2890,7 @@ export class GameController {
 
     const sprite = document.createElement("div");
     sprite.className = "scene-item-sprite";
-    sprite.style.backgroundImage = `url('${item.spriteSrc ?? "/assets/evidence/junk_paper1.png"}')`;
+    sprite.style.backgroundImage = `url('${item.spriteSrc ?? "./assets/evidence/junk_paper1.png"}')`;
 
     el.appendChild(sprite);
     this.#enableSceneDrag(el, targetId, item.id, item);
@@ -3290,7 +3290,7 @@ export class GameController {
     const btn = this.#els.btnPhone;
     const img = this.#els.phoneImg;
     const label = this.#els.phoneLabel;
-    const PHONE_SRC = "/assets/buttons/phone.png";
+    const PHONE_SRC = "./assets/buttons/phone.png";
 
     btn.classList.remove("is-active", "is-muted", "is-speaking", "is-dial");
 

@@ -5,18 +5,18 @@
  */
 
 const MUSIC_TRACKS = {
-  calm: "/assets/sfx/Abyssal_Calm_2026-04-27T073104.mp3",
-  tense: "/assets/sfx/Abyssal_Calm_2026-04-27T073104.mp3",
-  critical: "/assets/sfx/Abyssal_Calm_2026-04-27T073104.mp3",
+  calm: "./assets/sfx/Abyssal_Calm_2026-04-27T073104.mp3",
+  tense: "./assets/sfx/Abyssal_Calm_2026-04-27T073104.mp3",
+  critical: "./assets/sfx/Abyssal_Calm_2026-04-27T073104.mp3",
 };
 
 const SFX_TRACKS = {
-  ambientRain: "/assets/sfx/rain.mp3",
+  ambientRain: "./assets/sfx/rain.mp3",
   static: null,
-  phone: "/assets/sfx/old_phone.mp3",
-  button: "/assets/sfx/button.mp3",
-  win: "/assets/sfx/button.mp3",
-  lose: "/assets/sfx/button.mp3",
+  phone: "./assets/sfx/old_phone.mp3",
+  button: "./assets/sfx/button.mp3",
+  win: "./assets/sfx/button.mp3",
+  lose: "./assets/sfx/button.mp3",
 };
 
 const MUSIC_VOLUME = 0.48;
