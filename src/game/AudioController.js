@@ -108,6 +108,11 @@ export class AudioController {
       if (this.#unlocked) return;
       this.#unlocked = true;
 
+      const ambientCtx = this.#getOrCreateAmbientContext();
+      if (ambientCtx?.state === "suspended") {
+        void ambientCtx.resume().catch(() => {});
+      }
+
       if (this.#activeTier) {
         const activeNode = this.#musicNodes.get(this.#activeTier);
         if (activeNode) this.#startNode(activeNode, "music");
@@ -128,6 +133,20 @@ export class AudioController {
       once: true,
       passive: true,
     });
+  }
+
+  #getOrCreateAmbientContext() {
+    const AudioCtx = window.AudioContext ?? window.webkitAudioContext;
+    if (!AudioCtx) return null;
+
+    if (!this.#ambientContext || this.#ambientContext.state === "closed") {
+      this.#ambientContext = new AudioCtx();
+      this.#ambientGainNode = this.#ambientContext.createGain();
+      this.#ambientGainNode.gain.value = AMBIENT_VOLUME;
+      this.#ambientGainNode.connect(this.#ambientContext.destination);
+    }
+
+    return this.#ambientContext;
   }
 
   play(tier) {
@@ -397,21 +416,14 @@ export class AudioController {
   }
 
   async #ensureAmbientContext() {
-    const AudioCtx = window.AudioContext ?? window.webkitAudioContext;
-    if (!AudioCtx) return null;
+    const ctx = this.#getOrCreateAmbientContext();
+    if (!ctx) return null;
 
-    if (!this.#ambientContext || this.#ambientContext.state === "closed") {
-      this.#ambientContext = new AudioCtx();
-      this.#ambientGainNode = this.#ambientContext.createGain();
-      this.#ambientGainNode.gain.value = AMBIENT_VOLUME;
-      this.#ambientGainNode.connect(this.#ambientContext.destination);
+    if (ctx.state === "suspended" && this.#unlocked) {
+      await ctx.resume();
     }
 
-    if (this.#ambientContext.state === "suspended" && this.#unlocked) {
-      await this.#ambientContext.resume();
-    }
-
-    return this.#ambientContext;
+    return ctx;
   }
 
   async #ensureAmbientBuffer(ctx) {

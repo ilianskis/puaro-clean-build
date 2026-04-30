@@ -284,6 +284,16 @@
                 margin-bottom: 48px;
             }
 
+            .menu-fullscreen-note {
+                margin-bottom: 14px;
+                font-size: 11px;
+                letter-spacing: 3px;
+                text-transform: uppercase;
+                color: var(--paper-dark);
+                opacity: 0.8;
+                text-align: center;
+            }
+
             .menu-start-btn {
                 position: relative;
                 padding: 14px 48px;
@@ -329,6 +339,28 @@
                 opacity: 0.48;
                 text-transform: uppercase;
                 min-height: 14px;
+            }
+
+            .menu-tutorial-link {
+                display: inline-block;
+                margin-top: 16px;
+                font-size: 18px;
+                letter-spacing: 5px;
+                text-transform: uppercase;
+                color: var(--accent-amber);
+                text-decoration: none;
+                border-bottom: 1px solid rgba(200, 148, 26, 0.34);
+                padding-bottom: 4px;
+                transition:
+                    color 0.15s,
+                    border-color 0.15s,
+                    opacity 0.15s;
+            }
+
+            .menu-tutorial-link:hover {
+                color: var(--paper);
+                border-color: rgba(201, 186, 160, 0.62);
+                opacity: 1;
             }
 
             .menu-secondary-actions {
@@ -3296,7 +3328,7 @@
                 font-size: 9px;
             }
         </style>
-      <script type="module" crossorigin src="./assets/index-DKpbFn5r.js"></script>
+      <script type="module" crossorigin src="./assets/index-DIB8TWIo.js"></script>
     </head>
 
     <body>
@@ -3316,6 +3348,10 @@
 
                 <div class="menu-horizontal-rule"></div>
 
+                <p class="menu-fullscreen-note">
+                    Better experience in full screen
+                </p>
+
                 <button
                     class="menu-start-btn secondary"
                     id="btn-menu-continue"
@@ -3326,6 +3362,14 @@
                 <button class="menu-start-btn" id="btn-menu-start">
                     Open New Case
                 </button>
+                <a
+                    class="menu-tutorial-link"
+                    href="https://youtu.be/RH7wg3OW7D0?si=Lq8NxoakahjkCJx0"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    Short Tutorial
+                </a>
                 <p class="menu-save-note" id="menu-save-note"></p>
                 <div class="menu-secondary-actions">
                     <div class="menu-action-stack">
