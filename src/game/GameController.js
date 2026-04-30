@@ -785,7 +785,7 @@ export class GameController {
 
     if (!skipTrialPrompt && this.#shouldUseTrialMode()) {
       this.#openConfirmOverlay(
-        "For better experience, add an ElevenLabs key and either a Gemini key or an OpenAI key. For now, the shared trial is available without a time limit, though it may still be busy during provider spikes.",
+        "Only for better experience: add an ElevenLabs key and either a Gemini key or an OpenAI key. There is our system, but it can lag during provider spikes.",
         () => this.#handleNewCase(confirmLoss, true),
       );
       return;
@@ -977,7 +977,7 @@ export class GameController {
         );
         if (!stillActive) {
           this.#endTrialSession(
-            "Trial ended. Add your own Gemini or OpenAI key, plus ElevenLabs, to continue the investigation.",
+            "Access ended. Add your own Gemini or OpenAI key, plus ElevenLabs, to continue the investigation.",
           );
           return;
         }
@@ -1874,7 +1874,7 @@ export class GameController {
         const stillActive = this.#consumeTrialBudget(TRIAL_COST_CALL, "call");
         if (!stillActive) {
           this.#endTrialSession(
-            "Trial ended. Add your own Gemini or OpenAI key, plus ElevenLabs, to continue the investigation.",
+            "Access ended. Add your own Gemini or OpenAI key, plus ElevenLabs, to continue the investigation.",
           );
           return;
         }
@@ -3745,15 +3745,15 @@ export class GameController {
   #humanizeModelError(error, fallback) {
     const raw = String(error?.message ?? error ?? "");
     if (!INFINITE_SHARED_TRIAL && this.#shouldUseTrialMode() && this.#isTrialExpired()) {
-      return "Trial ended. For better experience, insert your own Gemini or OpenAI key, plus ElevenLabs, in Keys.";
+      return "Access ended. For better experience, insert your own Gemini or OpenAI key, plus ElevenLabs, in Keys.";
     }
     if (!INFINITE_SHARED_TRIAL && /prepayment credits are depleted/i.test(raw)) {
-      return "The shared trial has been exhausted for now. For better experience, insert your own Gemini or OpenAI key, plus ElevenLabs, in Keys.";
+      return "Our system is exhausted for now. For better experience, insert your own Gemini or OpenAI key, plus ElevenLabs, in Keys.";
     }
     if (
       /429|high demand|resource_exhausted|quota|rate limit|retry/i.test(raw)
     ) {
-      return "Free trial is busy right now. Repeat the attempt in a few seconds. For better experience, insert your own keys in Keys. While you wait, inspect passports or evidence.";
+      return "Our system is busy right now. Repeat the attempt in a few seconds. For better experience, insert your own keys in Keys. While you wait, inspect passports or evidence.";
     }
     return fallback;
   }
@@ -3813,7 +3813,7 @@ export class GameController {
       ? "Gemini active"
       : openaiApiKey
         ? "OpenAI active"
-        : "Shared text trial active";
+        : "Our system active";
     this.#renderKeysUI(activeTextProvider);
   }
 
