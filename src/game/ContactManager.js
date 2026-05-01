@@ -4,6 +4,8 @@
  * Manages the dynamic contact list (witnesses + people discovered during calls).
  * Contacts are added when suspects/witnesses mention someone by name.
  */
+import { personNameRoughlyMatches } from "./nameMatching.js";
+
 export class ContactManager {
   #contacts = new Map()  // id → contact object
 
@@ -35,9 +37,8 @@ export class ContactManager {
 
   /** Find contact by full name (case-insensitive) */
   findByName(name) {
-    const q = name.toLowerCase()
     for (const c of this.#contacts.values()) {
-      if (`${c.name} ${c.surname}`.toLowerCase().includes(q)) return c
+      if (personNameRoughlyMatches(name, c)) return c
     }
     return null
   }

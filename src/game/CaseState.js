@@ -4,6 +4,8 @@
  * Immutable case data container with query methods.
  * Populated from OllamaController.generateCase() output.
  */
+import { personNameRoughlyMatches } from "./nameMatching.js";
+
 export class CaseState {
   #data;
 
@@ -72,13 +74,9 @@ export class CaseState {
 
   /** Case-insensitive full name match */
   getSuspectByName(fullName) {
-    const q = fullName.toLowerCase();
     return (
-      this.#data.suspects.find(
-        (s) =>
-          `${s.name} ${s.surname}`.toLowerCase().includes(q) ||
-          s.name.toLowerCase() === q ||
-          s.surname.toLowerCase() === q,
+      this.#data.suspects.find((suspect) =>
+        personNameRoughlyMatches(fullName, suspect),
       ) ?? null
     );
   }

@@ -21,6 +21,10 @@ import { SuspicionManager } from "./SuspicionManager.js";
 import { ContactManager } from "./ContactManager.js";
 import { EvidenceManager } from "./EvidenceManager.js";
 import { PassportDatabase } from "./PassportDatabase.js";
+import {
+  buildNameRecognitionVariants,
+  canonicalizeTranscriptNames,
+} from "./nameMatching.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -740,6 +744,13 @@ export class GameController {
     const summary = this.#caseState.getCaseSummary();
     const guilty = this.#caseState.getGuiltySuspects();
     const guiltyNames = guilty.map((s) => `${s.name} ${s.surname}`);
+    const sideCaseCaught = this.#caseState.suspects
+      .filter(
+        (suspect) =>
+          this.#resolvedOddities.has(suspect.id) &&
+          !this.#caseState.guiltyIds.includes(suspect.id),
+      )
+      .map((suspect) => `${suspect.name} ${suspect.surname}`);
 
     e.winCaseRef.textContent = `Case #${summary.caseNumber} — ${summary.caseTitle}`;
 
@@ -750,6 +761,9 @@ export class GameController {
       guiltyNames.length > 1 ? "have" : "has"
     } been charged in the murder of ${summary.victim.name}.`;
     detail += ` Motives: ${motives}.`;
+    if (sideCaseCaught.length) {
+      detail += ` Also caught: ${sideCaseCaught.join(", ")}.`;
+    }
 
     e.winConfessionDetail.textContent = detail;
 
@@ -1032,7 +1046,12 @@ export class GameController {
       } IN THIS CASE`;
     }
 
-    this.#els.overviewStoryBrief.textContent = this.#caseState.storyBrief;
+    this.#els.overviewStoryBrief.innerHTML = `
+      <div style="margin-bottom:16px;font-size:18px;letter-spacing:3px;line-height:1.5;color:#f0c9c9;text-transform:uppercase;">
+        Not every person with a small irregularity is connected to the murder.
+      </div>
+      <div>${this.#escapeHtml(this.#caseState.storyBrief)}</div>
+    `;
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -1726,14 +1745,6 @@ export class GameController {
         { role: "assistant", content: opening.text },
       );
 
-      // Handle any person mentioned in the opening
-      if (opening.mentionedPersonName) {
-        await this.#handleMentionedPerson(
-          opening.mentionedPersonName,
-          opening.mentionedPersonSurname,
-        );
-      }
-
       await this.#deliverResponse(
         opening.text,
         this.#resolveSpeakerVoice(contact, "contact"),
@@ -1834,7 +1845,9 @@ export class GameController {
   async #handleSpeechEnd() {
     if (!this.#activeCall) return;
 
-    const playerText = this.#voice.getLastTranscript()?.trim() ?? "";
+    const playerText = this.#canonicalizePlayerTranscript(
+      this.#voice.getLastTranscript()?.trim() ?? "",
+    );
     this.#els.voiceHint.textContent = "";
 
     if (!playerText) {
@@ -1983,14 +1996,6 @@ export class GameController {
       content: response.text,
     });
 
-    // Handle newly mentioned person
-    if (response.mentionedPersonName) {
-      await this.#handleMentionedPerson(
-        response.mentionedPersonName,
-        response.mentionedPersonSurname,
-      );
-    }
-
     await this.#deliverResponse(
       response.text,
       this.#resolveSpeakerVoice(contact, "contact"),
@@ -2029,55 +2034,6 @@ export class GameController {
       this.#isSpeaking = false;
       this.#audio.stopStatic();
     }
-  }
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // MENTIONED PERSON HANDLING
-  // ───────────────────────────────────────────────────────────────────────────
-
-  /**
-   * When a witness mentions someone new by name, add them to the contact list.
-   * @param {string}      firstName
-   * @param {string|null} surname
-   */
-  async #handleMentionedPerson(firstName, surname) {
-    if (!firstName?.trim()) return;
-
-    const surnameSafe = (surname ?? "").trim();
-    const fullName = `${firstName} ${surnameSafe}`.trim();
-
-    // Skip if already a known suspect
-    if (this.#caseState.getSuspectByName(fullName)) return;
-
-    // Skip if already in contact list
-    if (this.#contactManager.findByName(fullName)) return;
-
-    const mentionedGender = this.#inferContactGender(firstName);
-    const mentionedVoice = this.#voiceProfileForGender(
-      mentionedGender,
-      "mentioned",
-    );
-    const newContact = ContactManager.createFromMention(
-      firstName,
-      surnameSafe,
-      {
-        gender: mentionedGender,
-        voiceArchetype: mentionedVoice.archetype,
-        voiceId: mentionedVoice.id,
-        passportPhotoFile: mentionedVoice.photo,
-      },
-    );
-    const added = this.#contactManager.discover(newContact);
-    if (!added) return;
-
-    // Keep passport database fresh
-    this.#passportDatabase.rebuild(this.#caseState, this.#contactManager);
-
-    // Update contacts list UI
-    this.#addContactToUI(newContact);
-
-    this.#showNotification(`New contact added: ${fullName}`);
-    console.info(`[GameController] Discovered contact: ${fullName}`);
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -2399,6 +2355,9 @@ export class GameController {
 
     const victim = this.#caseState.victim;
     push(victim?.name, victim?.surname, victim?.foundAt, victim?.occupation);
+    buildNameRecognitionVariants(victim?.name, victim?.surname).forEach((term) =>
+      rawTerms.push(term),
+    );
     splitPhrase(victim?.name);
     splitPhrase(victim?.foundAt);
 
@@ -2412,6 +2371,12 @@ export class GameController {
         person.alibiLocation,
         person.forSuspectName,
       );
+      buildNameRecognitionVariants(
+        person.name,
+        person.surname,
+        `${person.name ?? ""} ${person.surname ?? ""}`.trim(),
+        person.forSuspectName,
+      ).forEach((term) => rawTerms.push(term));
       splitPhrase(person.name);
       splitPhrase(person.surname);
       splitPhrase(person.alibiLocation);
@@ -2420,12 +2385,22 @@ export class GameController {
 
     this.#caseState.suspects.slice(0, 10).forEach((suspect) => {
       push(suspect.name, suspect.surname, suspect.alibiLocation);
+      buildNameRecognitionVariants(
+        suspect.name,
+        suspect.surname,
+        `${suspect.name ?? ""} ${suspect.surname ?? ""}`.trim(),
+      ).forEach((term) => rawTerms.push(term));
       splitPhrase(suspect.name);
       splitPhrase(suspect.surname);
     });
 
     this.#caseState.witnesses.slice(0, 4).forEach((witness) => {
       push(witness.name, witness.surname, witness.relationship);
+      buildNameRecognitionVariants(
+        witness.name,
+        witness.surname,
+        `${witness.name ?? ""} ${witness.surname ?? ""}`.trim(),
+      ).forEach((term) => rawTerms.push(term));
       splitPhrase(witness.name);
       splitPhrase(witness.surname);
     });
@@ -2435,6 +2410,19 @@ export class GameController {
       .filter((term) => term.length >= 2 && term.length <= 20);
 
     return Array.from(new Set(cleaned)).slice(0, 50);
+  }
+
+  #canonicalizePlayerTranscript(text) {
+    if (!text || !this.#caseState) return text;
+
+    const knownPeople = [
+      ...(this.#caseState.suspects ?? []),
+      ...(this.#caseState.witnesses ?? []),
+      ...(this.#contactManager?.getAll?.() ?? []),
+      this.#caseState.victim,
+    ].filter((person) => person?.name && person?.surname);
+
+    return canonicalizeTranscriptNames(text, knownPeople);
   }
 
   /** Rebuild the contacts list — includes witnesses, suspects, and discovered contacts. */
@@ -4090,10 +4078,10 @@ export class GameController {
       suspect.contactClosed = true;
       this.#buildContactsList();
       this.#showNotification(
-        "+5 bonus — side fraud exposed, contact closed from the murder case",
+        "Пойман — замешан в других делах. Контакт закрыт по делу об убийстве.",
       );
     } else {
-      this.#showNotification("+5 bonus — secondary irregularity exposed");
+      this.#showNotification("Пойман — замешан в других делах!");
     }
     this.#populateTopBar();
     this.#persistProgress();
