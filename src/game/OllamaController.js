@@ -935,7 +935,14 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
             ? "accomplice"
             : "innocent",
     }));
-    this.#forcePassportIrregularities(data.suspects);
+    data.suspects.forEach((suspect) => {
+      if (suspect.role === "guilty" || suspect.role === "accomplice") {
+        this.#clearSideIrregularitiesForSuspect(suspect);
+      }
+    });
+    this.#forcePassportIrregularities(
+      data.suspects.filter((suspect) => suspect.role === "innocent"),
+    );
 
     if (!Array.isArray(data.witnesses)) data.witnesses = [];
     const witnessTarget = Math.min(3, Math.max(2, data.witnesses.length || 2));
@@ -1403,6 +1410,40 @@ Write a brief forensic lab analysis result (2-3 sentences). Return ONLY valid JS
       this.#applyPassportFlagsToSuspect(suspect, patterns[patternIndex]);
       patternIndex += 1;
     });
+  }
+
+  #clearSideIrregularitiesForSuspect(suspect) {
+    if (!suspect) return;
+
+    suspect.passportFake = false;
+    suspect.passportDiscrepancy = null;
+    suspect.personalIrregularity = "";
+
+    if (!suspect.providedPassport) return;
+
+    suspect.providedPassport = {
+      ...suspect.providedPassport,
+      id_number: suspect.passportId,
+      address: suspect.passportAddress,
+      nationality: suspect.passportNationality,
+      issue_date: suspect.passportIssue,
+      expiry_date: suspect.passportExpiry,
+      date_of_birth: suspect.dateOfBirth,
+      phone_number: suspect.phoneNumber,
+      passportPhotoFile: suspect.passportPhotoFile,
+      uvFlags: {
+        photo: "ok",
+        id_number: "ok",
+        surname: "ok",
+        given_name: "ok",
+        date_of_birth: "ok",
+        nationality: "ok",
+        phone_number: "ok",
+        address: "ok",
+        issue_date: "ok",
+        expiry_date: "ok",
+      },
+    };
   }
 
   #applyPassportFlagsToSuspect(suspect, flags) {
